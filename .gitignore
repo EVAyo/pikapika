@@ -56,7 +56,9 @@ ios/build/
 
 # IDE
 *.iml
+.vscode/
 
 # APP
 /lib/assets/version.txt
+go.work
 

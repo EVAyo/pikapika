@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:event/event.dart';
 import 'package:flutter/material.dart';
 import 'package:pikapika/basic/Common.dart';
 import 'package:pikapika/basic/Cross.dart';
@@ -11,15 +12,19 @@ import 'package:pikapika/screens/components/CommentMainType.dart';
 import 'package:pikapika/screens/components/ItemBuilder.dart';
 import 'package:pikapika/screens/components/Recommendation.dart';
 
+import '../basic/config/HiddenSubIcon.dart';
+import '../basic/config/IconLoading.dart';
 import 'ComicReaderScreen.dart';
 import 'DownloadConfirmScreen.dart';
 import 'components/ComicDescriptionCard.dart';
 import 'components/ComicInfoCard.dart';
 import 'components/ComicTagsCard.dart';
 import 'components/CommentList.dart';
+import 'components/CommonData.dart';
 import 'components/ContentError.dart';
 import 'components/ContentLoading.dart';
 import 'components/ContinueReadButton.dart';
+import 'components/ListView.dart';
 import 'components/RightClickPop.dart';
 
 // 漫画详情
@@ -39,11 +44,15 @@ class _ComicInfoScreenState extends State<ComicInfoScreen> with RouteAware {
   late Future<ComicInfo> _comicFuture = _loadComic();
   late Key _comicFutureKey = UniqueKey();
   late Future<ViewLog?> _viewFuture = _loadViewLog();
+  late Future<ComicSubscribe?> _subscribedFuture = _loadSubscribed();
   late Future<List<Ep>> _epListFuture = _loadEps();
   StreamSubscription<String?>? _linkSubscription;
 
   Future<ComicInfo> _loadComic() async {
-    return await method.comicInfo(widget.comicId);
+    return await method.comicInfo(widget.comicId).then((value) async {
+      subscribedViewed(widget.comicId);
+      return value;
+    });
   }
 
   Future<List<Ep>> _loadEps() async {
@@ -59,6 +68,10 @@ class _ComicInfoScreenState extends State<ComicInfoScreen> with RouteAware {
 
   Future<ViewLog?> _loadViewLog() {
     return method.loadView(widget.comicId);
+  }
+
+  Future<ComicSubscribe?> _loadSubscribed() {
+    return method.loadSubscribed(widget.comicId);
   }
 
   @override
@@ -79,6 +92,7 @@ class _ComicInfoScreenState extends State<ComicInfoScreen> with RouteAware {
     if (widget.holdPkz) {
       _linkSubscription = linkSubscript(context);
     }
+    hiddenSubIconEvent.subscribe(_setState);
     super.initState();
   }
 
@@ -86,7 +100,12 @@ class _ComicInfoScreenState extends State<ComicInfoScreen> with RouteAware {
   void dispose() {
     _linkSubscription?.cancel();
     routeObserver.unsubscribe(this);
+    hiddenSubIconEvent.unsubscribe(_setState);
     super.dispose();
+  }
+
+  void _setState(dynamic args) {
+    setState(() {});
   }
 
   @override
@@ -142,10 +161,11 @@ class _ComicInfoScreenState extends State<ComicInfoScreen> with RouteAware {
             appBar: AppBar(
               title: Text(_comicInfo.title),
               actions: [
+                _buildSubscribeAction(_subscribedFuture, _comicInfo),
                 _buildDownloadAction(_epListFuture, _comicInfo),
               ],
             ),
-            body: ListView(
+            body: PikaListView(
               children: [
                 ComicInfoCard(_comicInfo, linkItem: true),
                 ComicTagsCard(_comicInfo.tags),
@@ -260,6 +280,51 @@ class _ComicInfoScreenState extends State<ComicInfoScreen> with RouteAware {
     );
   }
 
+  Widget _buildSubscribeAction(
+    Future<ComicSubscribe?> _subscribedFuture,
+    ComicInfo _comicInfo,
+  ) {
+    if (hiddenSubIcon) {
+      return Container();
+    }
+    return FutureBuilder(
+      future: _subscribedFuture,
+      builder: (BuildContext context, AsyncSnapshot<ComicSubscribe?> snapshot) {
+        if (snapshot.hasError) {
+          return IconButton(
+            onPressed: () {
+              setState(() {
+                this._subscribedFuture = _loadSubscribed();
+              });
+            },
+            icon: const Icon(Icons.sync_problem),
+          );
+        }
+        if (snapshot.connectionState != ConnectionState.done) {
+          return IconButton(onPressed: () {}, icon: const Icon(Icons.sync));
+        }
+        var _subscribed = snapshot.data;
+        return IconButton(
+          onPressed: () async {
+            if (_subscribed == null) {
+              await method.addSubscribed(_comicInfo.id);
+            } else {
+              await method.removeSubscribed(_comicInfo.id);
+            }
+            setState(() {
+              this._subscribedFuture = _loadSubscribed();
+            });
+          },
+          icon: Icon(
+            _subscribed == null
+                ? Icons.notifications_none
+                : Icons.notifications,
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildDownloadAction(
     Future<List<Ep>> _epListFuture,
     ComicInfo _comicInfo,
@@ -285,7 +350,7 @@ class _ComicInfoScreenState extends State<ComicInfoScreen> with RouteAware {
           onPressed: () async {
             Navigator.push(
               context,
-              MaterialPageRoute(
+              mixRoute(
                 builder: (context) => DownloadConfirmScreen(
                   comicInfo: _comicInfo,
                   epList: _epList.reversed.toList(),
@@ -356,7 +421,7 @@ class _ComicInfoScreenState extends State<ComicInfoScreen> with RouteAware {
   void _push(ComicInfo comicInfo, List<Ep> epList, int order, int? rank) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      mixRoute(
         builder: (context) => ComicReaderScreen(
           comicInfo: comicInfo,
           epList: epList,

@@ -5,7 +5,9 @@ import 'package:another_xlider/another_xlider.dart';
 import 'package:event/event.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_styled_toast/flutter_styled_toast.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
+import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:pikapika/basic/Common.dart';
 import 'package:pikapika/basic/Cross.dart';
@@ -14,6 +16,7 @@ import 'package:pikapika/basic/Method.dart';
 import 'package:pikapika/basic/config/Address.dart';
 import 'package:pikapika/basic/config/FullScreenAction.dart';
 import 'package:pikapika/basic/config/ImageAddress.dart';
+import 'package:pikapika/basic/config/ImageFilter.dart';
 import 'package:pikapika/basic/config/KeyboardController.dart';
 import 'package:pikapika/basic/config/NoAnimation.dart';
 import 'package:pikapika/basic/config/Quality.dart';
@@ -23,6 +26,10 @@ import 'package:pikapika/basic/config/ReaderType.dart';
 import 'package:pikapika/basic/config/VolumeController.dart';
 import 'package:pikapika/screens/components/PkzImages.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import '../../basic/config/IconLoading.dart';
+import '../../basic/config/ReaderBackgroundColor.dart';
+import '../../basic/config/UseApiLoadImage.dart';
+import '../../basic/config/VolumeNextChapter.dart';
 import '../FilePhotoViewScreen.dart';
 import 'gesture_zoom_box.dart';
 
@@ -202,13 +209,8 @@ class _ImageReaderContent extends StatefulWidget {
 
   final ImageReaderStruct struct;
 
-  const _ImageReaderContent(
-    this.struct,
-    this.pagerDirection,
-    this.pagerType,
-    this.fullScreenAction,
-    this.readerSliderPosition,
-  );
+  const _ImageReaderContent(this.struct, this.pagerDirection, this.pagerType,
+      this.fullScreenAction, this.readerSliderPosition);
 
   @override
   State<StatefulWidget> createState() {
@@ -221,6 +223,8 @@ class _ImageReaderContent extends StatefulWidget {
         return _GalleryReaderState();
       case ReaderType.WEB_TOON_FREE_ZOOM:
         return _ListViewReaderState();
+      case ReaderType.TWO_PAGE_GALLERY:
+        return _TwoPageGalleryReaderState();
       default:
         throw Exception("ERROR READER TYPE");
     }
@@ -228,8 +232,38 @@ class _ImageReaderContent extends StatefulWidget {
 }
 
 abstract class _ImageReaderContentState extends State<_ImageReaderContent> {
+  bool _sliderDragging = false;
+
   // 阅读器
   Widget _buildViewer();
+
+  Widget _buildViewerProcess() {
+    return Stack(
+      children: [
+        processImageFilter(_buildViewer()),
+        if (_sliderDragging) _sliderDraggingText(),
+      ],
+    );
+  }
+
+  Widget _sliderDraggingText() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0x88000000),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          "${_slider + 1} / ${widget.struct.images.length}",
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 30,
+          ),
+        ),
+      ),
+    );
+  }
 
   // 键盘, 音量键 等事件
   void _needJumpTo(int index, bool animation);
@@ -269,13 +303,53 @@ abstract class _ImageReaderContentState extends State<_ImageReaderContent> {
           }
           break;
         case "DOWN":
-          if (_current < widget.struct.images.length - 1) {
-            _needJumpTo(_current + 1, true);
+          int point = 1;
+          if (ReaderType.TWO_PAGE_GALLERY == currentReaderType()) {
+            point = 2;
+          }
+          if (_current < widget.struct.images.length - point) {
+            _needJumpTo(_current + point, true);
+          } else {
+            if (volumeNextChapter()) {
+              final now = DateTime.now().millisecondsSinceEpoch;
+              if (_noticeTime + 3000 > now) {
+                if (_hasNextEp()) {
+                  _onNextAction();
+                } else {
+                  showToast(
+                    "已经到头了",
+                    context: context,
+                    position: StyledToastPosition.center,
+                    animation: StyledToastAnimation.scale,
+                    reverseAnimation: StyledToastAnimation.fade,
+                    duration: const Duration(seconds: 3),
+                    animDuration: const Duration(milliseconds: 300),
+                    curve: Curves.elasticOut,
+                    reverseCurve: Curves.linear,
+                  );
+                }
+              } else {
+                _noticeTime = now;
+                showToast(
+                  "再次点击跳转到下一章",
+                  context: context,
+                  position: StyledToastPosition.center,
+                  animation: StyledToastAnimation.scale,
+                  reverseAnimation: StyledToastAnimation.fade,
+                  duration: const Duration(seconds: 3),
+                  animDuration: const Duration(milliseconds: 300),
+                  curve: Curves.elasticOut,
+                  reverseCurve: Curves.linear,
+                );
+              }
+            }
           }
           break;
       }
     }
   }
+
+  int _noticeTime = 0;
 
   late int _startIndex;
   late int _current;
@@ -311,35 +385,35 @@ abstract class _ImageReaderContentState extends State<_ImageReaderContent> {
       case FullScreenAction.CONTROLLER:
         return Stack(
           children: [
-            _buildViewer(),
+            _buildViewerProcess(),
             _buildBar(_buildFullScreenControllerStackItem()),
           ],
         );
       case FullScreenAction.TOUCH_ONCE:
         return Stack(
           children: [
-            _buildTouchOnceControllerAction(_buildViewer()),
+            _buildTouchOnceControllerAction(_buildViewerProcess()),
             _buildBar(Container()),
           ],
         );
       case FullScreenAction.TOUCH_DOUBLE:
         return Stack(
           children: [
-            _buildTouchDoubleControllerAction(_buildViewer()),
+            _buildTouchDoubleControllerAction(_buildViewerProcess()),
             _buildBar(Container()),
           ],
         );
       case FullScreenAction.TOUCH_DOUBLE_ONCE_NEXT:
         return Stack(
           children: [
-            _buildTouchDoubleOnceNextControllerAction(_buildViewer()),
+            _buildTouchDoubleOnceNextControllerAction(_buildViewerProcess()),
             _buildBar(Container()),
           ],
         );
       case FullScreenAction.THREE_AREA:
         return Stack(
           children: [
-            _buildViewer(),
+            _buildViewerProcess(),
             _buildBar(_buildThreeAreaControllerAction()),
           ],
         );
@@ -515,10 +589,20 @@ abstract class _ImageReaderContentState extends State<_ImageReaderContent> {
       values: [_slider.toDouble()],
       min: 0,
       max: (widget.struct.images.length - 1).toDouble(),
+      onDragStarted: (handlerIndex, lowerValue, upperValue) {
+        setState(() {
+          _sliderDragging = true;
+        });
+      },
       onDragging: (handlerIndex, lowerValue, upperValue) {
-        _slider = (lowerValue.toInt());
+        setState(() {
+          _slider = (lowerValue.toInt());
+        });
       },
       onDragCompleted: (handlerIndex, lowerValue, upperValue) {
+        setState(() {
+          _sliderDragging = false;
+        });
         _slider = (lowerValue.toInt());
         if (_slider != _current) {
           _needJumpTo(_slider, false);
@@ -538,24 +622,7 @@ abstract class _ImageReaderContentState extends State<_ImageReaderContent> {
         step: 1,
         isPercentRange: false,
       ),
-      tooltip: FlutterSliderTooltip(custom: (value) {
-        double a = value + 1;
-        return Container(
-          padding: const EdgeInsets.all(8),
-          decoration: ShapeDecoration(
-            color: Colors.black.withAlpha(0xCC),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadiusDirectional.circular(3)),
-          ),
-          child: Text(
-            '${a.toInt()}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-            ),
-          ),
-        );
-      }),
+      tooltip: FlutterSliderTooltip(disabled: true),
     );
   }
 
@@ -564,7 +631,41 @@ abstract class _ImageReaderContentState extends State<_ImageReaderContent> {
         !widget.struct.fullScreen) {
       return Container();
     }
-    return Align(
+    if (widget.readerSliderPosition == ReaderSliderPosition.RIGHT) {
+      return SafeArea(
+          child: Align(
+        alignment: Alignment.bottomRight,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding:
+                const EdgeInsets.only(left: 10, right: 10, top: 4, bottom: 4),
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: const BoxDecoration(
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(10),
+                bottomLeft: Radius.circular(10),
+              ),
+              color: Color(0x88000000),
+            ),
+            child: GestureDetector(
+              onTap: () {
+                widget.struct.onFullScreenChange(!widget.struct.fullScreen);
+              },
+              child: Icon(
+                widget.struct.fullScreen
+                    ? Icons.fullscreen_exit
+                    : Icons.fullscreen_outlined,
+                size: 30,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ));
+    }
+    return SafeArea(
+        child: Align(
       alignment: Alignment.bottomLeft,
       child: Material(
         color: Colors.transparent,
@@ -593,7 +694,7 @@ abstract class _ImageReaderContentState extends State<_ImageReaderContent> {
           ),
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildTouchOnceControllerAction(Widget child) {
@@ -873,19 +974,26 @@ class _SettingPanelState extends State<_SettingPanel> {
         Row(
           children: [
             _bottomIcon(
-              icon: Icons.shuffle,
+              icon: Icons.share,
               title: currentAddressName(),
               onPressed: () async {
-                await chooseAddress(context);
+                await chooseAddressAndSwitch(context);
                 setState(() {});
               },
             ),
             _bottomIcon(
-              icon: Icons.repeat_one,
+              icon: Icons.image_search,
               title: currentImageAddressName(),
               onPressed: () async {
                 await chooseImageAddress(context);
                 setState(() {});
+              },
+            ),
+            _bottomIcon(
+              icon: Icons.network_ping,
+              title: currentUseApiLoadImageName(),
+              onPressed: () {
+                chooseUseApiLoadImage(context);
               },
             ),
             _bottomIcon(
@@ -896,13 +1004,15 @@ class _SettingPanelState extends State<_SettingPanel> {
                 widget.onReloadEp();
               },
             ),
-            _bottomIcon(
-              icon: Icons.file_download,
-              title: "下载本作",
-              onPressed: widget.onDownload,
-            ),
           ],
         ),
+        // Row(children: [
+        //   _bottomIcon(
+        //     icon: Icons.file_download,
+        //     title: "下载本作",
+        //     onPressed: widget.onDownload,
+        //   ),
+        // ]),
       ],
     );
   }
@@ -1009,8 +1119,8 @@ class _WebToonReaderState extends _ImageReaderContentState {
   @override
   Widget _buildViewer() {
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.black,
+      decoration: BoxDecoration(
+        color: readerBackgroundColorObj,
       ),
       child: _buildList(),
     );
@@ -1034,9 +1144,8 @@ class _WebToonReaderState extends _ImageReaderContentState {
             } else {
               var maxHeight = constraints.maxHeight -
                   super._topBarHeight() -
-                  (widget.struct.fullScreen
-                      ? super._topBarHeight()
-                      : super._bottomBarHeight());
+                  super._bottomBarHeight() -
+                  MediaQuery.of(context).padding.bottom;
               renderSize = Size(
                 maxHeight *
                     _trueSizes[index]!.width /
@@ -1104,10 +1213,8 @@ class _WebToonReaderState extends _ImageReaderContentState {
             top: super._topBarHeight(),
             bottom: widget.pagerDirection == ReaderDirection.TOP_TO_BOTTOM
                 ? 130 // 纵向滚动 底部永远都是130的空白
-                : ( // 横向滚动
-                    widget.struct.fullScreen
-                        ? super._topBarHeight() // 全屏时底部和顶部到屏幕边框距离一样保持美观
-                        : super._bottomBarHeight())
+                : (super._bottomBarHeight() +
+                    MediaQuery.of(context).padding.bottom)
             // 非全屏时, 顶部去掉顶部BAR的高度, 底部去掉底部BAR的高度, 形成看似填充的效果
             ,
           ),
@@ -1140,7 +1247,7 @@ class _WebToonReaderState extends _ImageReaderContentState {
             Navigator.of(context).pop();
           }
         },
-        textColor: Colors.white,
+        textColor: invertColor(readerBackgroundColorObj),
         child: Container(
           padding: const EdgeInsets.only(top: 40, bottom: 40),
           child: Text(super._hasNextEp() ? '下一章' : '结束阅读'),
@@ -1356,8 +1463,8 @@ class _ListViewReaderState extends _ImageReaderContentState
   @override
   Widget _buildViewer() {
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.black,
+      decoration: BoxDecoration(
+        color: readerBackgroundColorObj,
       ),
       child: _buildList(),
     );
@@ -1381,9 +1488,8 @@ class _ListViewReaderState extends _ImageReaderContentState
             } else {
               var maxHeight = constraints.maxHeight -
                   super._topBarHeight() -
-                  (widget.struct.fullScreen
-                      ? super._topBarHeight()
-                      : super._bottomBarHeight());
+                  super._bottomBarHeight() -
+                  MediaQuery.of(context).padding.bottom;
               renderSize = Size(
                 maxHeight *
                     _trueSizes[index]!.width /
@@ -1450,10 +1556,8 @@ class _ListViewReaderState extends _ImageReaderContentState
             top: super._topBarHeight(),
             bottom: widget.pagerDirection == ReaderDirection.TOP_TO_BOTTOM
                 ? 130 // 纵向滚动 底部永远都是130的空白
-                : ( // 横向滚动
-                    widget.struct.fullScreen
-                        ? super._topBarHeight() // 全屏时底部和顶部到屏幕边框距离一样保持美观
-                        : super._bottomBarHeight())
+                : (super._bottomBarHeight() +
+                    MediaQuery.of(context).padding.bottom)
             // 非全屏时, 顶部去掉顶部BAR的高度, 底部去掉底部BAR的高度, 形成看似填充的效果
             ,
           ),
@@ -1494,7 +1598,7 @@ class _ListViewReaderState extends _ImageReaderContentState
             Navigator.of(context).pop();
           }
         },
-        textColor: Colors.white,
+        textColor: invertColor(readerBackgroundColorObj),
         child: Container(
           padding: const EdgeInsets.only(top: 40, bottom: 40),
           child: Text(super._hasNextEp() ? '下一章' : '结束阅读'),
@@ -1531,12 +1635,42 @@ class _ListViewReaderState extends _ImageReaderContentState
 
 class _GalleryReaderState extends _ImageReaderContentState {
   late PageController _pageController;
+  List<ImageProvider> ips = [];
+  List<PhotoViewGalleryPageOptions> options = [];
+  late Widget gallery;
 
   @override
   void initState() {
     super.initState();
     // 需要先初始化 super._startIndex 才能使用, 所以在上面
     _pageController = PageController(initialPage: super._startIndex);
+    for (var index = 0; index < widget.struct.images.length; index++) {
+      var item = widget.struct.images[index];
+      late ImageProvider ip;
+      if (item.pkzFile != null) {
+        ip = PkzImageProvider(item.pkzFile!.pkzPath, item.pkzFile!.path);
+      } else if (item.downloadLocalPath != null) {
+        ip = ResourceDownloadFileImageProvider(item.downloadLocalPath!);
+      } else {
+        ip = ResourceRemoteImageProvider(item.fileServer, item.path);
+      }
+      ips.add(ip);
+    }
+    for (var ip in ips) {
+      options.add(PhotoViewGalleryPageOptions(
+        imageProvider: ip,
+        errorBuilder: (b, e, s) {
+          print("$e,$s");
+          return LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              return buildError(constraints.maxWidth, constraints.maxHeight);
+            },
+          );
+        },
+        filterQuality: FilterQuality.high,
+      ));
+    }
+    _preloadJump(super._startIndex);
   }
 
   @override
@@ -1558,9 +1692,69 @@ class _GalleryReaderState extends _ImageReaderContentState {
         curve: Curves.ease,
       );
     }
+    _preloadJump(index);
+  }
+
+  _preloadJump(int index, {bool init = false}) {
+    fn() {
+      for (var i = index - 1; i < index + 3; i++) {
+        if (i < 0 || i >= ips.length) continue;
+        final ip = ips[i];
+        precacheImage(ip, context);
+      }
+    }
+
+    if (init) {
+      WidgetsBinding.instance?.addPostFrameCallback((_) => fn());
+    } else {
+      fn();
+    }
+  }
+
+  Future _onLongPress() async {
+    if (_current >= 0 && _current < widget.struct.images.length) {
+      var item = widget.struct.images[_current];
+      if (item.pkzFile != null) {
+        return;
+      }
+      Future<String> load() async {
+        var item = widget.struct.images[_current];
+        if (item.downloadLocalPath != null) {
+          return method.downloadImagePath(item.downloadLocalPath!);
+        }
+        var data = await method.remoteImageData(item.fileServer, item.path);
+        return data.finalPath;
+      }
+
+      String? choose = await chooseListDialog(context, '请选择', ['预览图片', '保存图片']);
+      switch (choose) {
+        case '预览图片':
+          try {
+            var file = await load();
+            Navigator.of(context).push(mixRoute(
+              builder: (context) => FilePhotoViewScreen(file),
+            ));
+          } catch (e) {
+            defaultToast(context, "图片加载失败");
+          }
+          break;
+        case '保存图片':
+          try {
+            var file = await load();
+            saveImage(file, context);
+          } catch (e) {
+            defaultToast(context, "图片加载失败");
+          }
+          break;
+      }
+    }
   }
 
   void _onGalleryPageChange(int to) {
+    for (var i = to; i < to + 3 && i < ips.length; i++) {
+      final ip = ips[i];
+      precacheImage(ip, context);
+    }
     // 包含一个下一章, 假设5张图片 0,1,2,3,4 length=5, 下一章=5
     if (to >= 0 && to < widget.struct.images.length) {
       super._onCurrentChange(to);
@@ -1569,12 +1763,12 @@ class _GalleryReaderState extends _ImageReaderContentState {
 
   @override
   Widget _buildViewer() {
-    Widget gallery = PhotoViewGallery.builder(
+    gallery = PhotoViewGallery.builder(
       scrollDirection: widget.pagerDirection == ReaderDirection.TOP_TO_BOTTOM
           ? Axis.vertical
           : Axis.horizontal,
       reverse: widget.pagerDirection == ReaderDirection.RIGHT_TO_LEFT,
-      backgroundDecoration: const BoxDecoration(color: Colors.black),
+      backgroundDecoration: BoxDecoration(color: readerBackgroundColorObj),
       loadingBuilder: (context, event) => LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           return buildLoading(constraints.maxWidth, constraints.maxHeight);
@@ -1584,97 +1778,13 @@ class _GalleryReaderState extends _ImageReaderContentState {
       onPageChanged: _onGalleryPageChange,
       itemCount: widget.struct.images.length,
       builder: (BuildContext context, int index) {
-        var item = widget.struct.images[index];
-        if (item.pkzFile != null) {
-          return PhotoViewGalleryPageOptions(
-            imageProvider:
-                PkzImageProvider(item.pkzFile!.pkzPath, item.pkzFile!.path),
-            errorBuilder: (b, e, s) {
-              print("$e,$s");
-              return LayoutBuilder(
-                builder: (BuildContext context, BoxConstraints constraints) {
-                  return buildError(
-                      constraints.maxWidth, constraints.maxHeight);
-                },
-              );
-            },
-            filterQuality: FilterQuality.high,
-          );
-        }
-        if (item.downloadLocalPath != null) {
-          return PhotoViewGalleryPageOptions(
-            imageProvider:
-                ResourceDownloadFileImageProvider(item.downloadLocalPath!),
-            errorBuilder: (b, e, s) {
-              print("$e,$s");
-              return LayoutBuilder(
-                builder: (BuildContext context, BoxConstraints constraints) {
-                  return buildError(
-                      constraints.maxWidth, constraints.maxHeight);
-                },
-              );
-            },
-            filterQuality: FilterQuality.high,
-          );
-        }
-        return PhotoViewGalleryPageOptions(
-          imageProvider:
-              ResourceRemoteImageProvider(item.fileServer, item.path),
-          errorBuilder: (b, e, s) {
-            print("$e,$s");
-            return LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints constraints) {
-                return buildError(constraints.maxWidth, constraints.maxHeight);
-              },
-            );
-          },
-          filterQuality: FilterQuality.high,
-        );
+        return options[index];
       },
       allowImplicitScrolling: true,
     );
     gallery = GestureDetector(
       child: gallery,
-      onLongPress: () async {
-        if (_current >= 0 && _current < widget.struct.images.length) {
-          var item = widget.struct.images[_current];
-          if (item.pkzFile != null) {
-            return;
-          }
-
-          Future<String> load() async {
-            var item = widget.struct.images[_current];
-            if (item.downloadLocalPath != null) {
-              return method.downloadImagePath(item.downloadLocalPath!);
-            }
-            var data = await method.remoteImageData(item.fileServer, item.path);
-            return data.finalPath;
-          }
-
-          String? choose =
-              await chooseListDialog(context, '请选择', ['预览图片', '保存图片']);
-          switch (choose) {
-            case '预览图片':
-              try {
-                var file = await load();
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => FilePhotoViewScreen(file),
-                ));
-              } catch (e) {
-                defaultToast(context, "图片加载失败");
-              }
-              break;
-            case '保存图片':
-              try {
-                var file = await load();
-                saveImage(file, context);
-              } catch (e) {
-                defaultToast(context, "图片加载失败");
-              }
-              break;
-          }
-        }
-      },
+      onLongPress: _onLongPress,
     );
     gallery = Container(
       padding: EdgeInsets.only(
@@ -1683,12 +1793,13 @@ class _GalleryReaderState extends _ImageReaderContentState {
       ),
       child: gallery,
     );
-    return Stack(
+    gallery = Stack(
       children: [
         gallery,
         _buildNextEpController(),
       ],
     );
+    return gallery;
   }
 
   Widget _buildNextEpController() {
@@ -1717,13 +1828,281 @@ class _GalleryReaderState extends _ImageReaderContentState {
                 Navigator.of(context).pop();
               }
             },
-            child: Text(_hasNextEp() ? '下一章' : '结束阅读',
-                style: const TextStyle(color: Colors.white)),
+            child: Text(
+              _hasNextEp() ? '下一章' : '结束阅读',
+              style: const TextStyle(color: Colors.white),
+            ),
           ),
         ),
       ),
     );
   }
 }
+
+///////////////////////////////////////////////////////////////////////////////
+
+class _TwoPageGalleryReaderState extends _ImageReaderContentState {
+  late PageController _pageController;
+  var _controllerTime = DateTime.now().millisecondsSinceEpoch + 400;
+  late final List<Size?> _trueSizes = [];
+  List<ImageProvider> ips = [];
+  List<PhotoViewGalleryPageOptions> options = [];
+  late PhotoViewGallery _view;
+
+  @override
+  void initState() {
+    // 需要先初始化 super._startIndex 才能使用, 所以在上面
+    for (var e in widget.struct.images) {
+      if (e.pkzFile != null &&
+          e.width != null &&
+          e.height != null &&
+          e.width! > 0 &&
+          e.height! > 0) {
+        _trueSizes.add(Size(e.width!.toDouble(), e.height!.toDouble()));
+      } else if (e.downloadLocalPath != null) {
+        _trueSizes.add(Size(e.width!.toDouble(), e.height!.toDouble()));
+      } else {
+        _trueSizes.add(null);
+      }
+    }
+    super.initState();
+    _pageController = PageController(initialPage: super._startIndex ~/ 2);
+    for (var index = 0; index < widget.struct.images.length; index++) {
+      var item = widget.struct.images[index];
+      late ImageProvider ip;
+      if (item.pkzFile != null) {
+        ip = PkzImageProvider(item.pkzFile!.pkzPath, item.pkzFile!.path);
+      } else if (item.downloadLocalPath != null) {
+        ip = ResourceDownloadFileImageProvider(item.downloadLocalPath!);
+      } else {
+        ip = ResourceRemoteImageProvider(item.fileServer, item.path);
+      }
+      ips.add(ip);
+    }
+    for (var index = 0; index < ips.length; index += 2) {
+      // 两页
+      late ImageProvider leftIp = ips[index];
+      late ImageProvider rightIp = ips[index + 1];
+      if (index + 1 < ips.length) {
+        leftIp = ips[index];
+        rightIp = ips[index + 1];
+      } else {
+        leftIp = ips[index];
+        // ImageProvider by color black
+        rightIp = const AssetImage('lib/assets/0.png');
+      }
+      if (twoPageDirection == TwoPageDirection.RIGHT_TO_LEFT) {
+        final temp = leftIp;
+        leftIp = rightIp;
+        rightIp = temp;
+      }
+      options.add(
+        PhotoViewGalleryPageOptions.customChild(
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              return Row(
+                children: [
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Image(
+                        image: leftIp,
+                        fit: BoxFit.contain,
+                        // loadingBuilder: (context, child, event) => buildLoading(constraints.maxWidth, constraints.maxHeight),
+                        errorBuilder: (b, e, s) {
+                          print("$e,$s");
+                          return buildError(
+                            constraints.maxWidth / 2,
+                            constraints.maxHeight / 2,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Image(
+                        image: rightIp,
+                        fit: BoxFit.contain,
+                        // loadingBuilder: (context, child, event) => buildLoading(constraints.maxWidth, constraints.maxHeight),
+                        errorBuilder: (b, e, s) {
+                          print("$e,$s");
+                          return buildError(
+                            constraints.maxWidth / 2,
+                            constraints.maxHeight / 2,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      );
+    }
+    _view = PhotoViewGallery(
+      pageController: _pageController,
+      pageOptions: options,
+      scrollDirection: widget.pagerDirection == ReaderDirection.TOP_TO_BOTTOM
+          ? Axis.vertical
+          : Axis.horizontal,
+      reverse: widget.pagerDirection == ReaderDirection.RIGHT_TO_LEFT,
+      onPageChanged: _onGalleryPageChange,
+      backgroundDecoration: BoxDecoration(color: readerBackgroundColorObj),
+    );
+    _preloadJump(super._startIndex, init: true);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void _needJumpTo(int index, bool animation) {
+    if (noAnimation() || animation == false) {
+      _pageController.jumpToPage(
+        index ~/ 2,
+      );
+    } else {
+      _pageController.animateToPage(
+        index ~/ 2,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.ease,
+      );
+    }
+    _preloadJump(index);
+  }
+
+  _preloadJump(int index, {bool init = false}) {
+    fn() {
+      for (var i = index - 2; i < index + 5; i++) {
+        if (i < 0 || i >= ips.length) continue;
+        final ip = ips[i];
+        precacheImage(ip, context);
+      }
+    }
+
+    if (init) {
+      WidgetsBinding.instance?.addPostFrameCallback((_) => fn());
+    } else {
+      fn();
+    }
+  }
+
+  @override
+  Widget _buildViewer() {
+    return Stack(
+      children: [
+        GestureDetector(
+          onLongPress: _onLongPress,
+          child: _view,
+        ),
+        _buildNextEpController(),
+      ],
+    );
+  }
+
+  void _onGalleryPageChange(int to) {
+    var toIndex = to * 2;
+    // 提前加载
+    for (var i = toIndex + 2; i < toIndex + 5 && i < ips.length; i++) {
+      final ip = ips[i];
+      precacheImage(ip, context);
+    }
+    // 包含一个下一章, 假设5张图片 0,1,2,3,4 length=5, 下一章=5
+    if (to >= 0 && to < widget.struct.images.length) {
+      super._onCurrentChange(toIndex);
+    }
+  }
+
+  Widget _buildNextEpController() {
+    if (super._fullscreenController() ||
+        _current < widget.struct.images.length - 2) return Container();
+    return Align(
+      alignment: Alignment.bottomRight,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding:
+              const EdgeInsets.only(left: 10, right: 10, top: 4, bottom: 4),
+          decoration: const BoxDecoration(
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(10),
+              bottomLeft: Radius.circular(10),
+            ),
+            color: Color(0x88000000),
+          ),
+          child: GestureDetector(
+            onTap: () {
+              if (_hasNextEp()) {
+                _onNextAction();
+              } else {
+                Navigator.of(context).pop();
+              }
+            },
+            child: Text(
+              _hasNextEp() ? '下一章' : '结束阅读',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future _onLongPress() async {
+    List<ReaderImageInfo> matchImages = [];
+    if (_current >= 0 && _current < widget.struct.images.length) {
+      var item = widget.struct.images[_current];
+      if (item.pkzFile != null) {
+        return;
+      }
+      matchImages.add(item);
+    }
+    if (_current + 1 >= 0 && _current + 1 < widget.struct.images.length) {
+      var item = widget.struct.images[_current + 1];
+      if (item.pkzFile != null) {
+        return;
+      }
+      matchImages.add(item);
+    }
+    if (matchImages.isEmpty) {
+      return;
+    }
+    String? choose = await chooseListDialog(context, '请选择', ['保存本页的图片']);
+    switch (choose) {
+      case '保存本页的图片':
+        for (var item in matchImages) {
+          if (item.downloadLocalPath != null) {
+            var file = await method.downloadImagePath(item.downloadLocalPath!);
+            saveImage(file, context);
+          } else {
+            var data = await method.remoteImageData(item.fileServer, item.path);
+            saveImage(data.finalPath, context);
+          }
+        }
+        break;
+    }
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+Color invertColor(Color color) {
+  return Color.fromRGBO(
+    255 - color.red,
+    255 - color.green,
+    255 - color.blue,
+    1.0,
+  );
+}
+
+///////////////////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////////////////

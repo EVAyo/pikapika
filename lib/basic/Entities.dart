@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// 图片
 class RemoteImageInfo {
   late String originalName;
@@ -8,6 +10,14 @@ class RemoteImageInfo {
     this.originalName = json["originalName"];
     this.path = json["path"];
     this.fileServer = json["fileServer"];
+  }
+
+  Map<String, dynamic> toJson() {
+    final _data = <String, dynamic>{};
+    _data['originalName'] = originalName;
+    _data['path'] = path;
+    _data['fileServer'] = fileServer;
+    return _data;
   }
 }
 
@@ -979,6 +989,7 @@ class PkzComicViewLog {
     required this.lastViewPictureRank,
     required this.lastViewTime,
   });
+
   late final String fileName;
   late final String lastViewComicId;
   late final String filePath;
@@ -988,7 +999,7 @@ class PkzComicViewLog {
   late final int lastViewPictureRank;
   late final String lastViewTime;
 
-  PkzComicViewLog.fromJson(Map<String, dynamic> json){
+  PkzComicViewLog.fromJson(Map<String, dynamic> json) {
     fileName = json['fileName'];
     lastViewComicId = json['lastViewComicId'];
     filePath = json['filePath'];
@@ -1013,12 +1024,206 @@ class PkzComicViewLog {
   }
 }
 
-class IsPro {
-  late bool isPro;
-  late int expire;
+class ProInfoAll {
+  ProInfoAll({
+    required this.proInfoAf,
+    required this.proInfoPat,
+  });
 
-  IsPro.fromJson(Map<String, dynamic> json) {
-    this.isPro = json["isPro"];
-    this.expire = json["expire"];
+  late final ProInfoAf proInfoAf;
+  late final ProInfoPat proInfoPat;
+
+  ProInfoAll.fromJson(Map<String, dynamic> json) {
+    proInfoAf = ProInfoAf.fromJson(json['pro_info_af']);
+    proInfoPat = ProInfoPat.fromJson(json['pro_info_pat']);
+  }
+
+  Map<String, dynamic> toJson() {
+    final _data = <String, dynamic>{};
+    _data['pro_info_normal'] = proInfoAf.toJson();
+    _data['pro_info_pat'] = proInfoPat.toJson();
+    return _data;
+  }
+}
+
+class ProInfoAf {
+  ProInfoAf({
+    required this.isPro,
+    required this.expire,
+  });
+
+  late final bool isPro;
+  late final int expire;
+
+  ProInfoAf.fromJson(Map<String, dynamic> json) {
+    isPro = json['is_pro'];
+    expire = json['expire'];
+  }
+
+  Map<String, dynamic> toJson() {
+    final _data = <String, dynamic>{};
+    _data['is_pro'] = isPro;
+    _data['expire'] = expire;
+    return _data;
+  }
+}
+
+class ProInfoPat {
+  ProInfoPat({
+    required this.isPro,
+    required this.patId,
+    required this.bindUid,
+    required this.requestDelete,
+    required this.reBind,
+    required this.errorType,
+    required this.errorMsg,
+    required this.accessKey,
+  });
+
+  late final bool isPro;
+  late final String patId;
+  late final String bindUid;
+  late final int requestDelete;
+  late final int reBind;
+  late final int errorType;
+  late final String errorMsg;
+  late final String accessKey;
+
+  ProInfoPat.fromJson(Map<String, dynamic> json) {
+    isPro = json['is_pro'];
+    patId = json['pat_id'];
+    bindUid = json['bind_uid'];
+    requestDelete = json['request_delete'];
+    reBind = json['re_bind'];
+    errorType = json['error_type'];
+    errorMsg = json['error_msg'];
+    accessKey = json['access_key'];
+  }
+
+  Map<String, dynamic> toJson() {
+    final _data = <String, dynamic>{};
+    _data['is_pro'] = isPro;
+    _data['pat_id'] = patId;
+    _data['bind_uid'] = bindUid;
+    _data['request_delete'] = requestDelete;
+    _data['re_bind'] = reBind;
+    _data['error_type'] = errorType;
+    _data['error_msg'] = errorMsg;
+    _data['access_key'] = accessKey;
+    return _data;
+  }
+}
+
+class ForgotPasswordResult {
+  ForgotPasswordResult({
+    required this.question1,
+    required this.question2,
+    required this.question3,
+  });
+
+  late final String question1;
+  late final String question2;
+  late final String question3;
+
+  ForgotPasswordResult.fromJson(Map<String, dynamic> json) {
+    question1 = json['question1'];
+    question2 = json['question2'];
+    question3 = json['question3'];
+  }
+
+  Map<String, dynamic> toJson() {
+    final _data = <String, dynamic>{};
+    _data['question1'] = question1;
+    _data['question2'] = question2;
+    _data['question3'] = question3;
+    return _data;
+  }
+}
+
+class ResetPasswordResult {
+  ResetPasswordResult({
+    required this.password,
+  });
+
+  late final String password;
+
+  ResetPasswordResult.fromJson(Map<String, dynamic> json) {
+    password = json['password'];
+  }
+
+  Map<String, dynamic> toJson() {
+    final _data = <String, dynamic>{};
+    _data['password'] = password;
+    return _data;
+  }
+}
+
+/// 订阅
+class ComicSubscribe {
+  late String id;
+  late String title;
+  late String author;
+  late int pagesCount;
+  late int epsCount;
+  late bool finished;
+  late String categories;
+  late String thumbOriginalName;
+  late String thumbFileServer;
+  late String thumbPath;
+  late String description;
+  late String chineseTeam;
+  late String tags;
+  late int likesCount;
+  late String subscribeTime;
+  late String updateSubscribeTime;
+  late int newEpCount;
+
+  ComicSubscribe.fromJson(Map<String, dynamic> json) {
+    print(json);
+    this.id = json["id"];
+    this.title = json["title"];
+    this.author = json["author"];
+    this.pagesCount = json["pagesCount"];
+    this.epsCount = json["epsCount"];
+    this.finished = json["finished"];
+    this.categories = json["categories"];
+    this.thumbOriginalName = json["thumbOriginalName"];
+    this.thumbFileServer = json["thumbFileServer"];
+    this.thumbPath = json["thumbPath"];
+    this.description = json["description"];
+    this.chineseTeam = json["chineseTeam"];
+    this.tags = json["tags"];
+    this.likesCount = json["likesCount"];
+    this.subscribeTime = json["subscribeTime"];
+    this.updateSubscribeTime = json["updateSubscribeTime"];
+    this.newEpCount = json["newEpCount"];
+  }
+
+  Map<String, dynamic> toSimpleJson() {
+    final _data = <String, dynamic>{};
+    _data['id'] = id;
+    _data['_id'] = id;
+    _data['title'] = title;
+    _data['author'] = author;
+    _data['pagesCount'] = pagesCount;
+    _data['epsCount'] = epsCount;
+    _data['finished'] = finished;
+    _data['categories'] = jsonDecode(categories);
+    _data['thumbOriginalName'] = thumbOriginalName;
+    _data['thumbFileServer'] = thumbFileServer;
+    _data['thumbPath'] = thumbPath;
+    _data['description'] = description;
+    _data['chineseTeam'] = chineseTeam;
+    _data['tags'] = tags;
+    _data['likesCount'] = likesCount;
+    _data['thumb'] = jsonDecode(jsonEncode(RemoteImageInfo.fromJson({
+      "originalName": thumbOriginalName,
+      "fileServer": thumbFileServer,
+      "path": thumbPath
+    })));
+    _data['subscribeTime'] = subscribeTime;
+    _data['updateSubscribeTime'] = updateSubscribeTime;
+    _data['newEpCount'] = newEpCount;
+    return _data;
   }
 }

@@ -4,9 +4,8 @@ on:
   workflow_dispatch:
 
 env:
-  go_version: '1.17'
-  flutter_channel: 'stable'
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  ANDROID_NDK_VERSION: '27.0.12077973'
 
 jobs:
 
@@ -37,9 +36,9 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ubuntu-latest-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-
+            ubuntu-latest-go-
       - name: Check release
         run: |
           cd ci
@@ -52,82 +51,113 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        sources:
+          - branch: master
         config:
           - target: windows
             host: windows-latest
             flutter_version: '2.10.3'
+            go_version: '1.17'
           - target: macos
             host: macos-latest
             flutter_version: '2.10.3'
+            go_version: '1.17'
+          - target: linux
+            host: ubuntu-latest
+            flutter_version: '2.10.3'
+            go_version: '1.17'
           - target: ios
             host: macos-latest
-            flutter_version: '3.0.4'
+            flutter_version: '2.10.5'
+            go_version: '1.23'
+          - target: ios
+            host: macos-latest
+            flutter_version: '3.7.3'
+            go_version: '1.23'
           - target: android-arm32
             host: ubuntu-latest
             flutter_version: '2.10.5'
+            go_version: '1.23'
           - target: android-arm64
             host: ubuntu-latest
             flutter_version: '2.10.5'
+            go_version: '1.23'
           - target: android-x86_64
             host: ubuntu-latest
             flutter_version: '2.10.5'
+            go_version: '1.23'
           - target: android-arm32
             host: ubuntu-latest
-            flutter_version: '3.0.4'
+            flutter_version: '3.7.3'
+            go_version: '1.23'
           - target: android-arm64
             host: ubuntu-latest
-            flutter_version: '3.0.4'
+            flutter_version: '3.7.3'
+            go_version: '1.23'
           - target: android-x86_64
             host: ubuntu-latest
-            flutter_version: '3.0.4'
+            flutter_version: '3.7.3'
+            go_version: '1.23'
+
 
     runs-on: ${{ matrix.config.host }}
 
     env:
       TARGET: ${{ matrix.config.target }}
-      flutter_version: ${{ matrix.config.flutter_version }}
+      FLUTTER_VERSION: ${{ matrix.config.flutter_version }}
+      BRANCH: ${{ matrix.sources.branch }}
+      go_version: ${{ matrix.config.go_version }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+
+      # Setup golang env and cache go module
 
       - name: Setup golang
         uses: actions/setup-go@v2
         with:
           go-version: ${{ env.go_version }}
 
-      - name: Cache go modules (Linux/Android)
-        if: matrix.config.target == 'android-arm32' || matrix.config.target == 'android-arm64' || matrix.config.target == 'android-x86_64' || matrix.config.target == 'linux'
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Cache go modules (macOS/ios)
-        if: matrix.config.target == 'macos' || matrix.config.target == 'ios'
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/Library/Caches/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
       - name: Cache go modules (Windows)
-        if: matrix.config.target == 'windows'
+        if: matrix.config.host == 'windows-latest'
         uses: actions/cache@v3
         with:
           path: |
             ~\AppData\Local\go-build
             ~\go\pkg\mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ matrix.config.host }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-
+            ${{ matrix.config.host }}-go-
+
+      - name: Cache go modules (Linux)
+        if: matrix.config.host == 'ubuntu-latest'
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ matrix.config.host }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ matrix.config.host }}-go-
+
+      - name: Cache go modules (macOS)
+        if: matrix.config.host == 'macos-latest'
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/Library/Caches/go-build
+            ~/go/pkg/mod
+          key: ${{ matrix.config.host }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ matrix.config.host }}-go-
+
+      # checkout
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ env.BRANCH }}
+
+      # check_access
 
       - id: check_asset
         name: Check asset
@@ -135,12 +165,14 @@ jobs:
           cd ci
           go run ./cmd/check_asset
 
+      # 
+
       - name: Setup flutter
         if: steps.check_asset.outputs.skip_build != 'true'
-        uses: subosito/flutter-action@v2.3.0
+        uses: subosito/flutter-action@v2
         with:
-          channel: ${{ env.flutter_channel }}
-          flutter-version: ${{ env.flutter_version }}
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          architecture: x64
 
       - name: Check core
         if: steps.check_asset.outputs.skip_build != 'true'
@@ -157,22 +189,44 @@ jobs:
           path: /opt/hostedtoolcache/flutter
           key: ${{ runner.os }}-flutter
 
-      - name: Setup java (Android)
+      - name: Cache Flutter dependencies (Mac host)
+        if: steps.check_asset.outputs.skip_build != 'true' && ( matrix.config.target == 'ios' || matrix.config.target == 'macos' )
+        uses: actions/cache@v3
+        with:
+          path: /Users/runner/hostedtoolcache/flutter
+          key: ${{ runner.os }}-flutter
+
+      - name: Cache Gradle dependencies (Android)
         if: steps.check_asset.outputs.skip_build != 'true' && ( matrix.config.target == 'android-arm32' || matrix.config.target == 'android-arm64' || matrix.config.target == 'android-x86_64' )
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Setup java (Android)
+        if: steps.check_asset.outputs.skip_build != 'true' && ( matrix.config.target == 'android-arm32' || matrix.config.target == 'android-arm64' || matrix.config.target == 'android-x86_64' ) && startsWith(matrix.config.flutter_version, '3.24.2') == false
         uses: actions/setup-java@v3
         with:
-          java-version: 8
-          distribution: 'zulu'
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Setup java (Android)
+        if: steps.check_asset.outputs.skip_build != 'true' && ( matrix.config.target == 'android-arm32' || matrix.config.target == 'android-arm64' || matrix.config.target == 'android-x86_64' ) && startsWith(matrix.config.flutter_version, '3.24.2')
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
       - name: Setup android tools (Android)
         if: steps.check_asset.outputs.skip_build != 'true' && ( matrix.config.target == 'android-arm32' || matrix.config.target == 'android-arm64' || matrix.config.target == 'android-x86_64' )
-        uses: maxim-lobanov/setup-android-tools@v1
+        uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platform-tools
-            platforms;android-32
-            build-tools;30.0.2
-            ndk;22.1.7171670
+          cmdline-tools-version: 8512546
+          packages: 'platform-tools platforms;android-32 build-tools;30.0.2 ndk;${{ env.ANDROID_NDK_VERSION }}'
 
       - name: Setup msys2 (Windows)
         if: steps.check_asset.outputs.skip_build != 'true' && matrix.config.target == 'windows'
@@ -191,7 +245,7 @@ jobs:
           mv appimagetool-x86_64.AppImage ${GITHUB_WORKSPACE}/bin/appimagetool
           echo ::add-path::${GITHUB_WORKSPACE}/bin
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev xorg-dev
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev libfuse2
 
       - name: Install hover (desktop)
         if: steps.check_asset.outputs.skip_build != 'true' && ( matrix.config.target == 'linux' || matrix.config.target == 'windows' || matrix.config.target == 'macos')
@@ -210,21 +264,82 @@ jobs:
           cp version.code.txt ../lib/assets/version.txt
 
       - name: Upgrade deps version (flutter2 non-mac)
-        if: steps.check_asset.outputs.skip_build != 'true' && matrix.config.host != 'macos-latest' && startsWith(matrix.config.flutter_version, '2')
+        if: steps.check_asset.outputs.skip_build != 'true' && startsWith(matrix.config.host, 'macos-') == false && startsWith(matrix.config.flutter_version, '2')
         run: |
           sed -i "s/another_xlider: ^1.0.1+2/another_xlider: 1.0.1+2/g" pubspec.yaml
           sed -i "s/flutter_styled_toast: ^2.0.0/flutter_styled_toast: 2.0.0/g" pubspec.yaml
           sed -i "s/filesystem_picker: ^3.0.0-beta.1/filesystem_picker: 2.0.0/g" pubspec.yaml
+          sed -i "s/file_picker: ^5.2.1/file_picker: 4.6.1/g" pubspec.yaml
+          sed -i "s/multi_select_flutter: ^4.0.0/multi_select_flutter: 4.1.2/g" pubspec.yaml
+          sed -i "s/modal_bottom_sheet: ^3.0.0-pre/modal_bottom_sheet: 2.0.1/g" pubspec.yaml
+          sed -i "s/Icons.energy_savings_leaf/Icons.ad_units/g" lib/screens/SettingsScreen.dart
           flutter pub get
 
       - name: Upgrade deps version (flutter2 mac)
-        if: steps.check_asset.outputs.skip_build != 'true' && matrix.config.host == 'macos-latest' && startsWith(matrix.config.flutter_version, '2')
+        if: steps.check_asset.outputs.skip_build != 'true' && startsWith(matrix.config.host, 'macos-') && startsWith(matrix.config.flutter_version, '2')
         run: |
           brew install gnu-sed
           gsed -i "s/another_xlider: ^1.0.1+2/another_xlider: 1.0.1+2/g" pubspec.yaml
           gsed -i "s/flutter_styled_toast: ^2.0.0/flutter_styled_toast: 2.0.0/g" pubspec.yaml
           gsed -i "s/filesystem_picker: ^3.0.0-beta.1/filesystem_picker: 2.0.0/g" pubspec.yaml
+          gsed -i "s/file_picker: ^5.2.1/file_picker: 4.6.1/g" pubspec.yaml
+          gsed -i "s/multi_select_flutter: ^4.0.0/multi_select_flutter: 4.1.2/g" pubspec.yaml
+          gsed -i "s/modal_bottom_sheet: ^3.0.0-pre/modal_bottom_sheet: 2.0.1/g" pubspec.yaml
+          gsed -i "s/Icons.energy_savings_leaf/Icons.ad_units/g" lib/screens/SettingsScreen.dart
           flutter pub get
+
+      - name: Upgrade deps version (flutter3 non-mac)
+        if: steps.check_asset.outputs.skip_build != 'true' && startsWith(matrix.config.host, 'macos-') == false && startsWith(matrix.config.flutter_version, '3.24.2')
+        run: |
+          sed -i "s/uri_to_file: ^0.2.0/uri_to_file:\n    git:\n      url: 'https:\/\/github.com\/niuhuan\/uri-to-file-fix.git'\n      ref: 'fix'\n/g" pubspec.yaml
+          sed -i "s/uni_links: ^0.5.1/uni_links3: ^0.5.3/g" pubspec.yaml
+          sed -i "s/permission_handler: ^10.1.0/permission_handler: ^11.3.1/g" pubspec.yaml
+          sed -i "s/image_picker: ^0.8.6/image_picker: ^1.1.2/g" pubspec.yaml
+          sed -i "s/image_cropper: ^1.5.0/image_cropper: ^8.0.2/g" pubspec.yaml
+          sed -i "s/flutter_datetime_picker: ^1.5.1/flutter_datetime_picker_plus: ^2.2.0/g" pubspec.yaml
+          sed -i "s/filesystem_picker: ^3.0.0-beta.1/filesystem_picker: ^4.1.0/g" pubspec.yaml
+          sed -i "s/flutter_styled_toast: ^2.0.0/flutter_styled_toast: ^2.2.1/g" pubspec.yaml
+          sed -i "s/intl: ^0.17.0/intl: ^0.19.0/g" pubspec.yaml
+          sed -i "s/flutter_datetime_picker/flutter_datetime_picker_plus/g" lib/screens/RegisterScreen.dart
+          sed -i "s/file_picker: ^5.2.1/file_picker: ^8.1.2/g" pubspec.yaml
+          sed -i "s/photo_view: ^0.13.0/photo_view: ^0.15.0/g" pubspec.yaml
+          sed -i "s/url_launcher: ^6.0.9/url_launcher: ^6.3.0/g" pubspec.yaml
+          sed -i "s/dividerColor: Colors.grey.shade200/dividerTheme: DividerThemeData(color: Colors.grey.shade200)/g" lib/basic/config/Themes.dart
+          sed -i "s/AppBarTheme(/AppBarTheme(titleTextStyle: const TextStyle(color: Colors.white),/g" lib/basic/config/Themes.dart
+          find lib -type f -name "*.dart" -exec sed -i "s/.headline4/.headlineMedium/g" {} \;
+          find lib -type f -name "*.dart" -exec sed -i "s/.bodyText1/.bodyMedium/g" {} \;
+          find lib -type f -name "*.dart" -exec sed -i "s/ImageStreamCompleter load(/ImageStreamCompleter loadImage(/g" {} \;
+          find lib -type f -name "*.dart" -exec sed -i "s/DecoderCallback decode/ImageDecoderCallback decode/g" {} \;
+          find lib -type f -name "*.dart" -exec sed -i "s/PaintingBinding.instance\!.instantiateImageCodec/ui.instantiateImageCodec/g" {} \;
+          find lib -type f -name "*.dart" -exec sed -i "s/as ui show Codec/as ui/g" {} \;
+          find lib -type f -name "*.dart" -exec sed -i "s/uni_links\/uni_links.dart/uni_links3\/uni_links.dart/g" {} \;
+          find lib -type f -name "*.dart" -exec sed -i "s/File? croppedFile/CroppedFile? croppedFile/g" {} \;
+          flutter pub upgrade
+          flutter pub get
+          cp -rf compatible/* ./
+
+      - name: Upgrade deps version (flutter3 mac)
+        if: steps.check_asset.outputs.skip_build != 'true' && startsWith(matrix.config.host, 'macos-') && startsWith(matrix.config.flutter_version, '3.22.3')
+        run: |
+          brew install gnu-sed
+          gsed -i "s/flutter_datetime_picker: ^1.5.1/flutter_datetime_picker_plus: ^2.2.0/g" pubspec.yaml
+          gsed -i "s/intl: ^0.17.0/intl: ^0.19.0/g" pubspec.yaml
+          gsed -i "s/filesystem_picker: ^3.0.0-beta.1/filesystem_picker: ^4.1.0/g" pubspec.yaml
+          gsed -i "s/flutter_styled_toast: ^2.0.0/flutter_styled_toast: ^2.2.1/g" pubspec.yaml
+          gsed -i "s/intl: ^0.17.0/intl: ^0.19.0/g" pubspec.yaml
+          gsed -i "s/flutter_datetime_picker/flutter_datetime_picker_plus/g" lib/screens/RegisterScreen.dart
+          gsed -i "s/file_picker: ^5.2.1/file_picker: ^8.1.2/g" pubspec.yaml
+          gsed -i "s/photo_view: ^0.13.0/photo_view: ^0.15.0/g" pubspec.yaml
+          find lib -type f -name "*.dart" -exec gsed -i "s/.headline4/.headlineMedium/g" {} \;
+          find lib -type f -name "*.dart" -exec gsed -i "s/.bodyText1/.bodyMedium/g" {} \;
+          find lib -type f -name "*.dart" -exec gsed -i "s/ImageStreamCompleter load(/ImageStreamCompleter loadImage(/g" {} \;
+          find lib -type f -name "*.dart" -exec gsed -i "s/DecoderCallback decode/ImageDecoderCallback decode/g" {} \;
+          find lib -type f -name "*.dart" -exec gsed -i "s/PaintingBinding.instance\!.instantiateImageCodec/ui.instantiateImageCodec/g" {} \;
+          find lib -type f -name "*.dart" -exec gsed -i "s/as ui show Codec/as ui/g" {} \;
+          flutter pub upgrade
+          flutter pub get
+          gsed -i "s/dividerColor: Colors.grey.shade200/dividerTheme: DividerThemeData(color: Colors.grey.shade200)/g" lib/basic/config/Themes.dart
+          gsed -i "s/AppBarTheme(/AppBarTheme(titleTextStyle: const TextStyle(color: Colors.white),/g" lib/basic/config/Themes.dart
 
       - name: Build (windows)
         if: steps.check_asset.outputs.skip_build != 'true' && matrix.config.target == 'windows'
@@ -255,10 +370,14 @@ jobs:
           hover build linux-appimage
           mv go/build/outputs/linux-appimage-release/*.AppImage build/build.AppImage
 
+      - name: Append application-identifier (ios)
+        if: steps.check_asset.outputs.skip_build != 'true' && matrix.config.target == 'ios'
+        run: |
+          /usr/libexec/PlistBuddy -c 'Add :application-identifier string opensource.pikapika' ios/Runner/Info.plist
+
       - name: Build (ios)
         if: steps.check_asset.outputs.skip_build != 'true' && matrix.config.target == 'ios'
         run: |
-          /usr/libexec/PlistBuddy -c 'Add :application-identifier string niuhuan.pikapika' ios/Runner/Info.plist
           sh scripts/build-ipa.sh
 
       - name: Build (android-arm32)

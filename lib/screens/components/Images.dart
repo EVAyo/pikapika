@@ -10,6 +10,7 @@ import 'package:pikapika/basic/config/ImageAddress.dart';
 import 'dart:io';
 import 'dart:ui' as ui show Codec;
 
+import '../../basic/config/IconLoading.dart';
 import '../FilePhotoViewScreen.dart';
 
 // 从本地加载图片
@@ -22,7 +23,9 @@ class ResourceFileImageProvider
 
   @override
   ImageStreamCompleter load(
-      ResourceFileImageProvider key, DecoderCallback decode) {
+    ResourceFileImageProvider key,
+    DecoderCallback decode,
+  ) {
     return MultiFrameImageStreamCompleter(
       codec: _loadAsync(key),
       scale: key.scale,
@@ -37,8 +40,9 @@ class ResourceFileImageProvider
 
   Future<ui.Codec> _loadAsync(ResourceFileImageProvider key) async {
     assert(key == this);
-    return PaintingBinding.instance!
-        .instantiateImageCodec(await File(path).readAsBytes());
+    return PaintingBinding.instance!.instantiateImageCodec(
+      await File(path).readAsBytes(),
+    );
   }
 
   @override
@@ -68,7 +72,9 @@ class ResourceDownloadFileImageProvider
 
   @override
   ImageStreamCompleter load(
-      ResourceDownloadFileImageProvider key, DecoderCallback decode) {
+    ResourceDownloadFileImageProvider key,
+    DecoderCallback decode,
+  ) {
     return MultiFrameImageStreamCompleter(
       codec: _loadAsync(key),
       scale: key.scale,
@@ -115,7 +121,9 @@ class ResourceRemoteImageProvider
 
   @override
   ImageStreamCompleter load(
-      ResourceRemoteImageProvider key, DecoderCallback decode) {
+    ResourceRemoteImageProvider key,
+    DecoderCallback decode,
+  ) {
     return MultiFrameImageStreamCompleter(
       codec: _loadAsync(key),
       scale: key.scale,
@@ -131,8 +139,9 @@ class ResourceRemoteImageProvider
   Future<ui.Codec> _loadAsync(ResourceRemoteImageProvider key) async {
     assert(key == this);
     var downloadTo = await method.remoteImageData(fileServer, path);
-    return PaintingBinding.instance!
-        .instantiateImageCodec(await File(downloadTo.finalPath).readAsBytes());
+    return PaintingBinding.instance!.instantiateImageCodec(
+      await File(downloadTo.finalPath).readAsBytes(),
+    );
   }
 
   @override
@@ -343,7 +352,7 @@ Widget buildFile(String file, double? width, double? height,
       String? choose = await chooseListDialog(context, '请选择', ['预览图片', '保存图片']);
       switch (choose) {
         case '预览图片':
-          Navigator.of(context).push(MaterialPageRoute(
+          Navigator.of(context).push(mixRoute(
             builder: (context) => FilePhotoViewScreen(file),
           ));
           break;

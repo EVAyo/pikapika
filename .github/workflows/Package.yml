@@ -1,0 +1,203 @@
+name: Package
+on:
+  workflow_dispatch:
+    inputs:
+      PACKAGE_IOS:
+        type: boolean
+        default: false
+        description: 'iOS version'
+        required: true
+      PACKAGE_ANDROID:
+        type: boolean
+        default: false
+        description: 'Android version'
+        required: true
+      PACKAGE_LINUX:
+        type: boolean
+        default: false
+        description: 'Linux version'
+      PACKAGE_MACOS:
+        type: boolean
+        default: false
+        description: 'MacOS version'
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - target: ios
+            host: macos-latest
+            go_version: '1.19'
+            flutter_version: '3.7.3'
+          - target: android
+            host: ubuntu-latest
+            go_version: '1.19'
+            flutter_version: '3.7.3'
+          - target: linux
+            host: ubuntu-latest
+            flutter_version: '2.10.3'
+            go_version: '1.17'
+          - target: macos
+            host: macos-latest
+            flutter_version: '2.10.3'
+            go_version: '1.17'
+    runs-on: ${{ matrix.config.host }}
+    env:
+      GO_VERSION: ${{ matrix.config.go_version }}
+      FLUTTER_VERSION: ${{ matrix.config.flutter_version }}
+    steps:
+      - name: need_build
+        id: need_build
+        run: |
+            if [ '${{ matrix.config.target }}' == 'android' ] && [ ${{ github.event.inputs.PACKAGE_ANDROID }} == 'true' ]; then
+                echo "::set-output name=need_build::true"
+            elif [ ${{ matrix.config.target }} == 'ios' ] && [ ${{ github.event.inputs.PACKAGE_IOS }} == 'true' ]; then
+                echo "::set-output name=need_build::true"
+            elif [ ${{ matrix.config.target }} == 'linux' ] && [ ${{ github.event.inputs.PACKAGE_LINUX }} == 'true' ]; then
+                echo "::set-output name=need_build::true"
+            elif [ ${{ matrix.config.target }} == 'macos' ] && [ ${{ github.event.inputs.PACKAGE_MACOS }} == 'true' ]; then
+                echo "::set-output name=need_build::true"
+            else
+                echo "::set-output name=need_build::false"
+            fi
+      - if: steps.need_build.outputs.need_build == 'true'
+        name: Setup flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          architecture: x64
+      - if: steps.need_build.outputs.need_build == 'true'
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - if: steps.need_build.outputs.need_build == 'true'
+        name: Cache go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - if: steps.need_build.outputs.need_build == 'true'
+        name: checkout
+        uses: actions/checkout@v3
+      - if: steps.need_build.outputs.need_build == 'true'
+        name: checkout core
+        uses: actions/checkout@v3
+        with:
+          repository: 'niuhuan/pikapika-go-core'
+          token: ${{ secrets.GH_TOKEN }}
+          path: 'go'
+      - if: steps.need_build.outputs.need_build == 'true'
+        name: Set-Version (All)
+        run: |
+          cd ci
+          cp version.code.txt ../lib/assets/version.txt
+      - if: steps.need_build.outputs.need_build == 'true' && (matrix.config.target == 'ios' || matrix.config.target == 'android')
+        name: Install go mobile (mobile)
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+      - if: steps.need_build.outputs.need_build == 'true' && (matrix.config.target == 'linux' || matrix.config.target == 'macos')
+        name: Install hover
+        run: |
+          go install github.com/go-flutter-desktop/hover@latest
+      - if: steps.need_build.outputs.need_build == 'true' && matrix.config.target == 'ios'
+        name: Build (ios)
+        run: |
+          sh scripts/build-ipa.sh
+      - if: steps.need_build.outputs.need_build == 'true' && matrix.config.target == 'android'
+        name: Setup java (Android)
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+      - if: steps.need_build.outputs.need_build == 'true' && matrix.config.target == 'android'
+        name: Setup android tools (Android)
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 8512546
+          packages: 'platform-tools platforms;android-32 build-tools;30.0.2 ndk;23.1.7779620'
+      - if: steps.need_build.outputs.need_build == 'true' && matrix.config.target == 'android'
+        name: Build (android-arm64)
+        env:
+          KEY_FILE_BASE64: ${{ secrets.KEY_FILE_BASE64 }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          sh scripts/build-apk-arm64.sh
+          sh scripts/sign-apk-github-actions.sh
+      - name: Upgrade deps version (flutter2 non-mac)
+        if: steps.need_build.outputs.need_build == 'true' && matrix.config.host != 'macos-latest' && startsWith(matrix.config.flutter_version, '2')
+        run: |
+          sed -i "s/another_xlider: ^1.0.1+2/another_xlider: 1.0.1+2/g" pubspec.yaml
+          sed -i "s/flutter_styled_toast: ^2.0.0/flutter_styled_toast: 2.0.0/g" pubspec.yaml
+          sed -i "s/filesystem_picker: ^3.0.0-beta.1/filesystem_picker: 2.0.0/g" pubspec.yaml
+          sed -i "s/file_picker: ^5.2.1/file_picker: 4.6.1/g" pubspec.yaml
+          sed -i "s/multi_select_flutter: ^4.0.0/multi_select_flutter: 4.1.2/g" pubspec.yaml
+          sed -i "s/modal_bottom_sheet: ^3.0.0-pre/modal_bottom_sheet: 2.0.1/g" pubspec.yaml
+          sed -i "s/Icons.energy_savings_leaf/Icons.ad_units/g" lib/screens/SettingsScreen.dart
+          flutter pub get
+      - name: Upgrade deps version (flutter2 mac)
+        if: steps.need_build.outputs.need_build == 'true' && matrix.config.host == 'macos-latest' && startsWith(matrix.config.flutter_version, '2')
+        run: |
+          brew install gnu-sed
+          gsed -i "s/another_xlider: ^1.0.1+2/another_xlider: 1.0.1+2/g" pubspec.yaml
+          gsed -i "s/flutter_styled_toast: ^2.0.0/flutter_styled_toast: 2.0.0/g" pubspec.yaml
+          gsed -i "s/filesystem_picker: ^3.0.0-beta.1/filesystem_picker: 2.0.0/g" pubspec.yaml
+          gsed -i "s/file_picker: ^5.2.1/file_picker: 4.6.1/g" pubspec.yaml
+          gsed -i "s/multi_select_flutter: ^4.0.0/multi_select_flutter: 4.1.2/g" pubspec.yaml
+          gsed -i "s/modal_bottom_sheet: ^3.0.0-pre/modal_bottom_sheet: 2.0.1/g" pubspec.yaml
+          gsed -i "s/Icons.energy_savings_leaf/Icons.ad_units/g" lib/screens/SettingsScreen.dart
+          flutter pub get
+      - if: steps.need_build.outputs.need_build == 'true' && matrix.config.target == 'linux'
+        name: Setup (linux)
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+        run: |
+          curl -JOL https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod a+x appimagetool-x86_64.AppImage
+          mkdir -p ${GITHUB_WORKSPACE}/bin
+          mv appimagetool-x86_64.AppImage ${GITHUB_WORKSPACE}/bin/appimagetool
+          echo ::add-path::${GITHUB_WORKSPACE}/bin
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev libfuse2
+      - if: steps.need_build.outputs.need_build == 'true' && matrix.config.target == 'linux'
+        name: Build (linux)
+        run: |
+          sh scripts/build-linux.sh
+      - if: steps.need_build.outputs.need_build == 'true' && matrix.config.target == 'macos'
+        name: Build (macos)
+        run: |
+          sh scripts/build-macos-dmg.sh
+          mv go/build/outputs/darwin-dmg-release/*.dmg build/build.dmg
+      - if: steps.need_build.outputs.need_build == 'true' && matrix.config.target == 'ios'
+        name: 'Upload Artifact (iOS)'
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'nosign.ipa'
+          path: 'build/nosign.ipa'
+          retention-days: 3
+      - if: steps.need_build.outputs.need_build == 'true' && matrix.config.target == 'android'
+        name: 'Upload Artifact (Android)'
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'app-release.apk'
+          path: 'build/app/outputs/flutter-apk/app-release.apk'
+          retention-days: 3
+      - if: steps.need_build.outputs.need_build == 'true' && matrix.config.target == 'linux'
+        name: 'Upload Artifact (Linux)'
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'build.AppImage'
+          path: 'build/build.AppImage'
+          retention-days: 3
+      - if: steps.need_build.outputs.need_build == 'true' && matrix.config.target == 'macos'
+        name: 'Upload Artifact (MacOS)'
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'build.dmg'
+          path: 'build/build.dmg'
+

@@ -1,108 +1,97 @@
-PIKAPIKA - 漫画客户端
-===================
-[![license](https://img.shields.io/github/license/niuhuan/pikapika)](https://raw.githubusercontent.com/niuhuan/pikapika/master/LICENSE)
+PIKAPIKA - Comic Reader
+=======================
 [![releases](https://img.shields.io/github/v/release/niuhuan/pikapika)](https://github.com/niuhuan/pikapika/releases)
-[![downloads](https://img.shields.io/github/downloads/niuhuan/pikapika/total)](https://github.com/niuhuan/pikapika/releases)
 
-- 美观易用且无广告的漫画客户端, 能运行在Windows/MacOS/Linux/Android/IOS中。
-- 此APP内容存在限制级别内容(例如 露骨/血腥/暴力/吸毒)，18岁以下的用户需在监护人陪同下使用，并请您在遵守当地法律法规。
-- 您的star和issue是对开发者的莫大鼓励, 可以源仓库下载最新的源码/安装包, 表示支持/提出建议。
-- 源仓库地址 [https://github.com/niuhuan/pikapika](https://github.com/niuhuan/pikapika)
+- A visually appealing, easy-to-use, ad-free manga client that runs on Windows/MacOS/Linux/Android/iOS.
+- This app contains restricted content (such as explicit, gory, violent, drug-related scenes). Users under 18 should use it under parental supervision, and please comply with local laws and regulations.
+- Your stars and issues are a great encouragement to the developers. You can download the latest source code/installation package from the source repository to show support/offer suggestions.
+- Source Repository URL is [https://github.com/niuhuan/pikapika](https://github.com/niuhuan/pikapika)
 
-## 界面 / 功能
+## Interface / Functions
 
-![阅读器](images/reader.png)
+![reader](images/reader.png)
 
-### 分流
+### Traffic Diversion
 
-VPN->代理->分流, 这三个功能如果同时设置, 您会在您手机的VPN上访问代理, 使用代理请求分流服务器。
+VPN -> Proxy -> Traffic Diversion: If these three functions are set simultaneously, you will access the proxy through the VPN on your phone, using the proxy to request the traffic diversion server.
 
-### 漫画分类/搜索
+### Comic categories/search
 
-![分类](images/categories_screen.png) ![列表](images/comic_list.png)
+Search comics in categories
 
-### 漫画阅读/下载/导入/导出
+### Comic reader/download/imports/exports
 
-您可以导出任意已经完成的下载到zip, 从另外一台设备导入。 导出的zip解压后可以直接使用其中的HTML进行阅读
+You can export any completed downloads to a zip file and import it from another device. After extracting the exported zip, you can directly use the HTML files within for reading.
 
-![导出下载](images/exporting.png)
+### Games
 
-![HTML预览](images/exporting2.png)
+You can download games without ads.
 
-### 游戏
+## Features
 
-![games](images/games.png)
-![game](images/game.png)
+- [x] Users
+    - [x] Login / Register / Get personal information / Auto check-in
+    - [x] Change password / Signature / Avatar
+- [x] Comics
+    - [x] Categories / Search / Random comic / Also reading this comic / Rankings
+    - [x] Search in categories / Search by "category / tag / creator / translation group"
+    - [x] Comic details / Chapters / View images / Save images to the album
+    - [x] Favorites / Likes
+    - [x] Get comments / Comment / Comment reply (comments in the community cannot be deleted, please use with caution)
+    - [x] Update notification
+- [x] Games
+    - [x] List / Details / Ad-free download
+- [x] Downloads
+    - [x] Import/export / Wireless sharing / Transfer between mobile and PC devices
+    - [x] Export to encrypted archive file / Directly view encrypted archive file
+- [ ] Chat room
+- [x] Cache / Auto clean
+- [x] Device support
+    - [x] Mobile
+        - [x] File association
+        - [x] Custom hyperlinks
+    - [x] Android
+        - [x] High refresh rate screen adaptation (90/120/144... Hz)
+        - [x] Android 10 and above automatically switch to dark/night mode with the system
 
-## 特性
+## Other tips
 
-- [x] 用户
-    - [x] 登录 / 注册 / 获取个人信息 / 自动打卡
-    - [x] 修改密码 / 修改签名 / 修改头像
-- [x] 漫画
-    - [x] 分类 / 搜索 / 随机本子 / 看此本子的也在看 / 排行榜
-    - [x] 在分类中搜索 / 按 "分类 / 标签 / 创建人 / 汉化组" 检索
-    - [x] 漫画详情 / 章节 / 看图 / 将图片保存到相册
-    - [x] 收藏 / 喜欢
-    - [x] 获取评论 / 评论 / 评论回复 (社区评论后无法删除, 请谨慎使用)
-- [x] 游戏
-    - [x] 列表 / 详情 / 无广告下载
-- [x] 下载
-    - [x] 导入导出 / 无线共享 / 移动设备与PC设备传输
-    - [x] 导出到加密的归档文件 / 直接观看加密的归档文件
-- [ ] 聊天室
-- [x] 缓存 / 自动清理
-- [x] 设备支持
-    - [x] 移动端
-      - [x] 文件关联
-      - [x] 自定义超链接
-    - [x] 安卓
-        - [x] 高刷新频率屏幕适配 (90/120/144... Hz)
-        - [x] 安卓10以上随系统进入深色/夜间模式
+Data storage location
 
-## 其他说明
+- ios/android: In the program's own data directory, deleting it will clear it
+- windows: In the data folder in the same directory as the program
+- macos: ~/Library/Application\ Support/pikapika
+- linux: ~/.pikapika
 
-数据资料存储位置
+## Technology Stack
 
-- ios/android : 程序自身数据目录中, 删除就会清理
-- windows : 程序同一目录中data文件夹下
-- macos : ~/Library/Application\ Support/pikapika
-- linux : ~/.pikapika
+### Multi-platform adaptation
 
-## 技术架构
+This application uses golang and dart (flutter) as the main languages and is compatible with Windows, Linux, MacOS, Android, and iOS.
 
-### 多平台适配
-
-这个应用程序使用golang和dart(flutter)作为主要语言, 可以兼容Windows, linux, MacOS, Android, IOS
-
-使用了不同的框架桥接到桌面和移动平台上
+Different frameworks are used to bridge to desktop and mobile platforms
 
 - go-flutter => Windows / MacOS / Linux
-- gomobile => Android / IOS
+- gomobile => Android / iOS
 
-![平台](images/platforms.png)
+![platforms](images/platforms.png)
 
-### 构建环境
+### Build environment
 
-(桌面端/移动端)
+(Desktop/Mobile)
 
 - [golang](https://golang.org/) (1.17/1.18)
 - [flutter](https://flutter.dev/) (2.10.3/3.0.4)
 
-## 请您遵守使用规则
+## Please follow the usage rules.
 
-软件副本分发规则
+Software copy distribution and code usage rules
 
-- 本软件仅供学习交流使用, 本软件或本软件的拓展, 个人或企业不可用于商业用途, 不可上架任何商店
-- 不要在任何其他 **二次元软件** 的 **聊天社区** 或 **开发社区** 内, 发布有关本软件的链接或信息
-- 不要发送本软件安装包到 **任何社区内** , 不要将APK/IPA/ZIP/DMG发送包括任何聊天软件内的群聊功能。 分享本软件时, 在社区中使用Github中提供的Releases页面的链接, 或使用私聊窗口发送。
+- The code of this software can be used for personal use without permission, but no releases are allowed, and it cannot be used for commercial purposes by individuals or companies, nor can it be put on any store.
+- Do not post links or information about this software in any **two-dimensional** chat community or development community. The author does not take any stance on any views that differ.
+- Do not send the software installation package to **any community**, and do not send APK/IPA/ZIP/DMG to any group chat function in any chat software. Please use the link provided on the Releases page in Github.
+- Forks of this repository must retain the link to this repository to guide users to discuss in the main repository.
 
-拓展包括但是不限于以下内容
+Disclaimer
 
-- 使用本软件进行继续开发形成的软件。
-- 引入本软件部分内容为依赖/参考本软件/使用本软件内代码的同时, 包含本软件内一致内容或功能的软件。
-- 直接对本软件进行打包发布
-
-责任声明
-
-- 作者仅分享编程技术, 不分发软件, 不对分发软件承担任何后果。 因传播或下载造成的法律问题或纠纷, 需行为人自行承担, 请您遵守当地法以及副本接受方(社区或人)所在地区的法律。
+- The author only shares programming technology and does not distribute software. The person who spreads the content is responsible for any legal issues or disputes caused by the spread. Please comply with local laws and the laws of the recipient (community or individual) region.
